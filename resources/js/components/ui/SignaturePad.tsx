@@ -148,7 +148,6 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError }
         className={`relative overflow-hidden rounded-lg border bg-white ${
           hasError ? 'border-red-300 bg-red-50' : 'border-slate-200'
         }`}
-        style={{ height: CANVAS_HEIGHT }}
       >
         <canvas
           ref={canvasRef}
