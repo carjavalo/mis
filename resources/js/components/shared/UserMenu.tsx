@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { User } from '../../lib/auth';
+import { motion, Transition } from 'motion/react';
 import { LogOut } from 'lucide-react';
 
 interface UserMenuProps {
@@ -10,6 +11,12 @@ interface UserMenuProps {
 
 const UserMenu: React.FC<UserMenuProps> = ({ user, onClose, onLogout }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const menuTransition: Transition = {
+    type: 'tween',
+    ease: [0.22, 1, 0.36, 1],
+    duration: 0.22,
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -32,9 +39,13 @@ const UserMenu: React.FC<UserMenuProps> = ({ user, onClose, onLogout }) => {
   };
 
   return (
-    <div 
+    <motion.div
       ref={menuRef}
-      className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 animate-in fade-in zoom-in-95 duration-200"
+      initial={{ opacity: 0, y: -8, scale: 0.96, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -8, scale: 0.96, filter: 'blur(4px)' }}
+      transition={menuTransition}
+      className="absolute right-0 top-full z-50 mt-2 w-72 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
     >
       <div className="border-b border-slate-200 bg-slate-50 p-4">
         <div className="flex items-start justify-between gap-3">
@@ -60,7 +71,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ user, onClose, onLogout }) => {
           <span>Cerrar sesión</span>
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

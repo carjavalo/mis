@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../providers/AuthContext';
 import UserMenu from './UserMenu';
+import { AnimatePresence } from 'motion/react';
 import { ChevronDown } from 'lucide-react';
 
 interface HeaderProps {
@@ -25,8 +26,8 @@ const Header: React.FC<HeaderProps> = ({ currentSection }) => {
       <div className="h-1 w-full bg-[#1e2b66]" />
       <div className="flex h-16 items-center justify-between px-4 lg:h-20 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center gap-3 pr-3">
-          <div className="hidden h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#1e2b66] text-xs font-bold text-white shadow-sm sm:grid">
-            MIS
+          <div className="hidden h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm ring-2 ring-[#1e2b66]/10 sm:grid">
+            <img src="/logo-hospital.png" alt="Hospital Universitario del Valle" className="h-full w-full object-contain" />
           </div>
           <div className="min-w-0">
             <p className="hidden text-xs font-medium text-slate-500 sm:block">Banco de Sangre HUV</p>
@@ -50,13 +51,15 @@ const Header: React.FC<HeaderProps> = ({ currentSection }) => {
             />
           </button>
 
-          {isUserMenuOpen && (
-            <UserMenu
-              user={user}
-              onClose={() => setIsUserMenuOpen(false)}
-              onLogout={logout}
-            />
-          )}
+          <AnimatePresence>
+            {isUserMenuOpen && (
+              <UserMenu
+                user={user}
+                onClose={() => setIsUserMenuOpen(false)}
+                onLogout={logout}
+              />
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </header>

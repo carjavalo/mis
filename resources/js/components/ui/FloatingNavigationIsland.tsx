@@ -79,7 +79,7 @@ export function FloatingNavigationIsland({ items, currentSection }: FloatingNavi
             borderRadius: isExpanded ? 24 : 999,
           }}
           transition={islandTransition}
-          className="overflow-hidden border border-white/60 bg-white/95 text-slate-950 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-950/5 backdrop-blur-xl"
+          className="relative overflow-hidden border border-white/60 bg-white/95 text-slate-950 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-950/5 backdrop-blur-xl"
         >
           <motion.button
             type="button"
@@ -87,7 +87,7 @@ export function FloatingNavigationIsland({ items, currentSection }: FloatingNavi
             initial={false}
             animate={{ opacity: isExpanded ? 0 : 1, scale: isExpanded ? 0.98 : 1 }}
             transition={islandTransition}
-            className={clsx('flex h-14 w-full items-center gap-3 px-3 text-left', isExpanded && 'pointer-events-none')}
+            className={clsx('absolute inset-x-0 top-0 flex h-14 w-full items-center gap-3 px-3 text-left', isExpanded && 'pointer-events-none')}
           >
             {activeItem ? renderIcon(activeItem.icon, true) : <span className="h-9 w-9" />}
             <div className="min-w-0 flex-1">
