@@ -5,13 +5,14 @@ interface SignaturePadProps {
   value?: string;
   onChange: (dataUrl: string) => void;
   hasError?: boolean;
+  disabled?: boolean;
 }
 
 const CANVAS_HEIGHT = 200;
 const STROKE_COLOR = '#1e2b66';
 const STROKE_WIDTH = 2.5;
 
-const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError }) => {
+const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError, disabled }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -89,6 +90,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError }
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (disabled) return;
     event.preventDefault();
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
@@ -151,7 +153,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError }
       >
         <canvas
           ref={canvasRef}
-          className="block w-full cursor-crosshair touch-none"
+          className={`block w-full touch-none ${disabled ? 'cursor-default' : 'cursor-crosshair'}`}
           style={{ height: CANVAS_HEIGHT }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -162,23 +164,25 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ value, onChange, hasError }
         {!hasContent && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-300">
             <Signature className="h-7 w-7" />
-            <span className="text-sm font-medium">Firma aquí</span>
+            <span className="text-sm font-medium">{disabled ? 'Sin firma' : 'Firma aquí'}</span>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">Dibuja tu firma con el mouse o el dedo.</p>
-        <button
-          type="button"
-          onClick={clear}
-          disabled={!hasContent}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Eraser className="h-3.5 w-3.5" />
-          Limpiar
-        </button>
-      </div>
+      {!disabled && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">Dibuja tu firma con el mouse o el dedo.</p>
+          <button
+            type="button"
+            onClick={clear}
+            disabled={!hasContent}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+            Limpiar
+          </button>
+        </div>
+      )}
     </div>
   );
 };

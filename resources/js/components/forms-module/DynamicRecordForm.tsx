@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { AlertCircle, CheckCircle, Clock, FileText, Loader2, MessageSquare, RotateCcw, Save, ShieldCheck, X, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Eye, FileText, Loader2, MessageSquare, RotateCcw, Save, ShieldCheck, X, XCircle } from 'lucide-react';
 import { DynamicForm, FormColumn, COLUMN_TYPES } from './types/types';
 import { formsService } from '@/lib/formService';
 import { getColumnIcon } from '@/components/ui/ColumnIcons';
@@ -37,6 +37,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState('');
   const [canReview, setCanReview] = useState(false);
+  const [canEdit, setCanEdit] = useState<boolean | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewIntent, setReviewIntent] = useState<ReviewIntent>(null);
   const [reviewComments, setReviewComments] = useState('');
@@ -48,6 +49,9 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     [form.columns_config]
   );
 
+  // Mientras no se confirme el permiso de edición, el registro se muestra en solo lectura
+  const readOnly = !canEdit;
+
   const emitRecordToast = (variant: 'success' | 'error', key: NotificationKey<'records'>) => {
     const copy = getNotificationCopy('records', key);
     const handler = variant === 'success' ? toastSuccess : toastError;
@@ -56,7 +60,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
   };
 
   useEffect(() => {
-    if (user && documentId) checkReviewPermission();
+    if (user && documentId) checkPermissions();
   }, [user, documentId]);
 
   useEffect(() => {
@@ -72,10 +76,14 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     setFormData(defaultValues);
   }, [recordId, form.columns_config]);
 
-  const checkReviewPermission = async () => {
+  const checkPermissions = async () => {
+    // Administradores y editores siempre pueden editar; el resto depende del permiso del documento
+    const privilegedRole = user?.rol === 'super-admin' || user?.rol === 'admin' || user?.rol === 'editor';
+
     try {
       if (user?.rol === 'super-admin') {
         setCanReview(true);
+        setCanEdit(true);
         return;
       }
 
@@ -83,8 +91,10 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
       const permissions: any[] = response.data.data || [];
       const permission = permissions.find((item: any) => Number(item.document_id) === Number(documentId));
       setCanReview(Boolean(permission?.can_review));
+      setCanEdit(privilegedRole || Boolean(permission?.can_edit));
     } catch {
       setCanReview(false);
+      setCanEdit(privilegedRole);
     }
   };
 
@@ -239,7 +249,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
   const renderInput = (column: FormColumn) => {
     const value = formData[column.name] ?? '';
     const hasError = !!errors[column.name];
-    const baseClassName = `w-full rounded-lg border bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#1e2b66] focus:ring-4 focus:ring-[#1e2b66]/10 ${
+    const baseClassName = `w-full rounded-lg border bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#1e2b66] focus:ring-4 focus:ring-[#1e2b66]/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${
       hasError ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-100' : 'border-slate-200'
     }`;
 
@@ -249,6 +259,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
           <textarea
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} min-h-28 py-3`}
             placeholder={column.placeholder || `Ingrese ${column.label.toLowerCase()}`}
           />
@@ -259,6 +270,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
           <select
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
           >
             <option value="">Seleccionar...</option>
@@ -274,6 +286,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             value={value}
             onChange={(dataUrl) => handleInputChange(column.name, dataUrl)}
             hasError={hasError}
+            disabled={readOnly}
           />
         );
 
@@ -284,14 +297,16 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             <button
               type="button"
               onClick={() => handleInputChange(column.name, true)}
-              className={`h-9 rounded-md px-4 text-sm font-semibold transition ${boolValue ? 'bg-[#1e2b66] text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}
+              disabled={readOnly}
+              className={`h-9 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed ${boolValue ? 'bg-[#1e2b66] text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}
             >
               Sí
             </button>
             <button
               type="button"
               onClick={() => handleInputChange(column.name, false)}
-              className={`h-9 rounded-md px-4 text-sm font-semibold transition ${!boolValue ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-white'}`}
+              disabled={readOnly}
+              className={`h-9 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed ${!boolValue ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-white'}`}
             >
               No
             </button>
@@ -305,6 +320,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             type="date"
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
           />
         );
@@ -315,6 +331,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             type="datetime-local"
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
           />
         );
@@ -325,6 +342,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             type="number"
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
             placeholder={column.placeholder || `Ingrese ${column.label.toLowerCase()}`}
           />
@@ -337,6 +355,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             step="0.01"
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
             placeholder={column.placeholder || `Ingrese ${column.label.toLowerCase()}`}
           />
@@ -348,6 +367,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
             type="text"
             value={value}
             onChange={(event) => handleInputChange(column.name, event.target.value)}
+            disabled={readOnly}
             className={`${baseClassName} h-11`}
             placeholder={column.placeholder || `Ingrese ${column.label.toLowerCase()}`}
             maxLength={column.max_length}
@@ -356,7 +376,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     }
   };
 
-  if (loading) {
+  if (loading || canEdit === null) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
         <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-600">
@@ -367,7 +387,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     );
   }
 
-  const canSave = !isEditing || formData.status !== 'approved' || user?.rol === 'super-admin';
+  const canSave = !readOnly && (!isEditing || formData.status !== 'approved' || user?.rol === 'super-admin');
   const canShowReviewActions = isEditing && canReview && ['draft', 'in_review', 'returned'].includes(formData.status || 'draft');
 
   return (
@@ -376,13 +396,19 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1e2b66]">
-              {isEditing ? 'Editar registro' : 'Nuevo registro'}
+              {readOnly ? 'Ver registro' : isEditing ? 'Editar registro' : 'Nuevo registro'}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold text-slate-950">
                 {isEditing ? `Registro #${recordId}` : 'Crear registro'}
               </h1>
               {isEditing && getStatusBadge(formData.status)}
+              {readOnly && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                  <Eye className="h-3.5 w-3.5" />
+                  Solo lectura
+                </span>
+              )}
             </div>
             <div className="mt-3 flex min-w-0 items-center gap-2 text-sm text-slate-600">
               <FileText className="h-4 w-4 shrink-0 text-slate-400" />
@@ -421,7 +447,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X className="h-4 w-4" />
-              Cancelar
+              {readOnly ? 'Volver' : 'Cancelar'}
             </button>
 
             {canSave && (
@@ -449,10 +475,21 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs font-medium text-slate-500">Modo</p>
-            <p className="mt-1 text-lg font-semibold text-slate-950">{isEditing ? 'Edición' : 'Creación'}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-950">{readOnly ? 'Lectura' : isEditing ? 'Edición' : 'Creación'}</p>
           </div>
         </div>
       </div>
+
+      {readOnly && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+          <div className="flex items-start gap-3">
+            <Eye className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
+            <p className="text-sm font-medium">
+              Estás viendo este registro en modo solo lectura. No tienes permiso para editarlo.
+            </p>
+          </div>
+        </div>
+      )}
 
       {isEditing && formData.status === 'returned' && formData.review_comments && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
@@ -478,7 +515,11 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-950">Campos del registro</h2>
-          <p className="mt-1 text-sm text-slate-500">Los campos marcados con asterisco son obligatorios.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {readOnly
+              ? 'Estás viendo este registro en modo solo lectura.'
+              : 'Los campos marcados con asterisco son obligatorios.'}
+          </p>
         </div>
 
         <div className="divide-y divide-slate-100">
@@ -529,15 +570,26 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
           <p className="text-sm text-slate-600">
             <span className="font-semibold text-slate-950">{form.columns_config.length}</span> campos configurados
           </p>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || reviewing || !canSave}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#1e2b66] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#172252] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Guardando...' : 'Guardar registro'}
-          </button>
+          {readOnly ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <X className="h-4 w-4" />
+              Volver
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || reviewing || !canSave}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#1e2b66] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#172252] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {saving ? 'Guardando...' : 'Guardar registro'}
+            </button>
+          )}
         </div>
       </div>
 
