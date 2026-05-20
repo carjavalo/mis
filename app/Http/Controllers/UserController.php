@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Auth; // 🔽 IMPORTAR AUTH FOR LOGGING
 
 class UserController extends Controller
 {
+    private function roleValue(User $user): string
+    {
+        return $user->rol instanceof UserRole ? $user->rol->value : (string) $user->rol;
+    }
+
     public function index(): JsonResponse
     {
         $users = User::all();
@@ -59,7 +64,7 @@ class UserController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id() ?? $user->id, // Fallback to created user if no auth (e.g. seeder/first user)
             'action' => 'user_created',
-            'description' => "Usuario creado: {$user->nombre} ({$user->rol})",
+            'description' => "Usuario creado: {$user->nombre} ({$this->roleValue($user)})",
             'subject_type' => User::class,
             'subject_id' => $user->id,
             'ip_address' => $request->ip(),
@@ -71,7 +76,7 @@ class UserController extends Controller
             'nombre' => $user->nombre,
             'correo' => $user->correo,
             'telefono' => $user->telefono,
-            'rol' => $user->rol,
+            'rol' => $this->roleValue($user),
             'created_at' => $user->created_at,
         ], 201);
     }
@@ -86,7 +91,7 @@ class UserController extends Controller
             'nombre' => $user->nombre,
             'correo' => $user->correo,
             'telefono' => $user->telefono,
-            'rol' => $user->rol,
+            'rol' => $this->roleValue($user),
             'document_permissions' => $user->documentPermissions,
             'created_at' => $user->created_at,
         ]);
@@ -151,7 +156,7 @@ class UserController extends Controller
             'nombre' => $user->nombre,
             'correo' => $user->correo,
             'telefono' => $user->telefono,
-            'rol' => $user->rol,
+            'rol' => $this->roleValue($user),
             'updated_at' => $user->updated_at,
         ]);
     }
