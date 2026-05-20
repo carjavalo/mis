@@ -171,7 +171,7 @@ class UserDocumentPermissionController extends Controller
                         'user_id' => $permission->user_id,
                         'user_name' => $permission->user->nombre,
                         'user_email' => $permission->user->correo,
-                        'user_role' => $permission->user->rol,
+                        'user_role' => $permission->user->rol instanceof \BackedEnum ? $permission->user->rol->value : $permission->user->rol,
                         'can_view' => $permission->can_view,
                         'can_edit' => $permission->can_edit,
                         'can_delete' => $permission->can_delete,
