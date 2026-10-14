@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/providers/AuthContext';
 import CreateFormModal from './modals/CreateFormModal';
+import EditFormModal from './modals/EditFormModal';
 import ViewFormModal from './modals/ViewFormModal';
 import DeleteFormModal from './modals/DeleteFormModal';
 import { DynamicForm } from './types/types';
@@ -19,6 +20,7 @@ import {
   Eye,
   FileText,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -34,6 +36,7 @@ const FormsTable: React.FC = () => {
   const navigate = useNavigate();
   // Estados para modales
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false); // Nuevo estado
@@ -134,6 +137,16 @@ const FormsTable: React.FC = () => {
     setShowViewModal(true);
   };
 
+  const openEditModal = (form: DynamicForm) => {
+    setSelectedForm(form);
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    loadForms();
+    success('Documento actualizado', { description: 'Los cambios se guardaron correctamente.' });
+  };
+
   const openDeleteModal = (form: DynamicForm) => {
     setSelectedForm(form);
     setShowDeleteModal(true);
@@ -147,6 +160,7 @@ const FormsTable: React.FC = () => {
   // Cerrar modales
   const closeModals = () => {
     setShowCreateModal(false);
+    setShowEditModal(false);
     setShowViewModal(false);
     setShowDeleteModal(false);
     setShowPermissionsModal(false);
@@ -398,7 +412,19 @@ const FormsTable: React.FC = () => {
                         </button>
                         
                         {canManage && (
-                          <button 
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(form)}
+                            className="rounded-lg p-2 text-slate-500 transition hover:bg-[#1e2b66]/10 hover:text-[#1e2b66] focus:outline-none focus:ring-4 focus:ring-[#1e2b66]/10"
+                            title="Editar documento"
+                            aria-label={`Editar ${form.name}`}
+                          >
+                            <Pencil className="h-5 w-5" />
+                          </button>
+                        )}
+
+                        {canManage && (
+                          <button
                             type="button"
                             onClick={() => openPermissionsModal(form)}
                             className="rounded-lg p-2 text-slate-500 transition hover:bg-[#1e2b66]/10 hover:text-[#1e2b66] focus:outline-none focus:ring-4 focus:ring-[#1e2b66]/10"
@@ -446,6 +472,13 @@ const FormsTable: React.FC = () => {
         isOpen={showCreateModal}
         onClose={closeModals}
         onSuccess={handleCreateSuccess}
+      />
+
+      <EditFormModal
+        isOpen={showEditModal}
+        form={selectedForm}
+        onClose={closeModals}
+        onSuccess={handleEditSuccess}
       />
 
       <ViewFormModal

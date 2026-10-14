@@ -1,0 +1,28 @@
+MIS
+
+MIS
+
+- flujos FORMATO FORMULARIO
+
+1. GRUPO uBICACION: PUESTO FIJO / MOVIL BUS / MOVIL NKR / MOVIL 3, TRASTEO
+
+- Dispositivo: neveras transporte -> Rango esperado: TRANSPORTE COMPONENTES: 1-10 °C
+- Equipo: aire acondicionado -> Rango esperado: AMBIENTE: 18-24 °C  
+
+
+
+1. GRUPO uBICACION: HEMOCENTRO
+
+- Equipo: Nevera o cuarto frío componentes -> Rango esperado: ALM. COMPONENTES: 1-6°C 
+- Equipo: aire acondicionado ambiente -> Rango esperado: AMBIENTE: 18-24 °C
+- Equipo: Nevera reactivos -> rango esperado: ALM. REACTIVOS: 2-8°C 
+- Equipo: Nevera o cuarto frío congelamiento -> rango esperado: ALM. COMP. CONGELADOS: -25 a -35°C
+      
+
+
+fUNCIONALIDADES:
+- Duplicar campo 
+- botón agregar encabezado (para todo formato)
+- reportes
+- El slug solo puede contener letras minúsculas, números y guiones -  borrar esta restricción 
+- firma en formato nombre y apellido automático (nombre y primera letra apellido)

@@ -1,7 +1,7 @@
 // components/forms-module/RecordsTable.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DynamicForm } from './types/types';
+import { DynamicForm, isPresentationalColumn } from './types/types';
 import { formsService } from '@/lib/formService';
 import Pagination from '@/components/ui/Pagination';
 import { useToast } from '@/providers/ToastContext';
@@ -142,7 +142,9 @@ const RecordTable: React.FC<RecordsTableProps> = ({ form, documentId, onRecordsC
     const term = searchTerm.trim().toLowerCase();
     if (!term) return true;
 
-    return [record.id, record.status, ...form.columns_config.map((column) => record[column.name])]
+    return [record.id, record.status, ...form.columns_config
+      .filter((column) => !isPresentationalColumn(column.type))
+      .map((column) => record[column.name])]
       .some((value) => String(value ?? '').toLowerCase().includes(term));
   });
 
@@ -276,7 +278,7 @@ const RecordTable: React.FC<RecordsTableProps> = ({ form, documentId, onRecordsC
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   Estado
                 </th>
-                {form.columns_config.map(column => (
+                {form.columns_config.filter(column => !isPresentationalColumn(column.type)).map(column => (
                   <th key={column.name} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                     {column.label}
                     {column.required && <span className="text-red-500 ml-1">*</span>}
@@ -303,15 +305,21 @@ const RecordTable: React.FC<RecordsTableProps> = ({ form, documentId, onRecordsC
                       {getStatusLabel(record.status)}
                     </span>
                   </td>
-                  {form.columns_config.map(column => (
+                  {form.columns_config.filter(column => !isPresentationalColumn(column.type)).map(column => (
                     <td key={column.name} className="max-w-[240px] whitespace-nowrap px-5 py-4 text-sm text-slate-700">
                       {column.type === 'signature' ? (
                         record[column.name] ? (
-                          <img
-                            src={record[column.name]}
-                            alt="Firma"
-                            className="h-9 w-auto max-w-[140px] rounded border border-slate-200 bg-white object-contain"
-                          />
+                          String(record[column.name]).startsWith('data:image') ? (
+                            <img
+                              src={record[column.name]}
+                              alt="Firma"
+                              className="h-9 w-auto max-w-[140px] rounded border border-slate-200 bg-white object-contain"
+                            />
+                          ) : (
+                            <span className="text-lg text-[#1e2b66]" style={{ fontFamily: "'Segoe Script','Brush Script MT',cursive" }}>
+                              {record[column.name]}
+                            </span>
+                          )
                         ) : (
                           <span className="text-slate-400">Sin firma</span>
                         )

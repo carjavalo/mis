@@ -51,6 +51,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Tipos de Documentos
     Route::apiResource('document-types', App\Http\Controllers\DocumentTypeController::class);
 
+    // Plantillas de documentos (estructuras reutilizables ligadas a un código)
+    Route::apiResource('templates', App\Http\Controllers\DocumentTemplateController::class);
+
     // Documentos disponibles para asignar permisos
     Route::get('/documents', [UserDocumentPermissionController::class, 'getAllDocuments']);
     // Documentos del usuario actual

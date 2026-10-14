@@ -17,12 +17,15 @@ class DynamicForm extends Model
         'created_by',
         'document_type_id',
         'is_notification_enabled',
-        'notification_time'
+        'notification_time',
+        'version',
+        'vigencia'
     ];
 
     protected $casts = [
         'columns_config' => 'array',
         'is_notification_enabled' => 'boolean',
+        'vigencia' => 'date:Y-m-d',
     ];
 
     public function type()

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../shared/Header';
-import { Home, Users, FileText, Activity } from 'lucide-react';
+import { Home, Users, FileText, FileStack, Activity } from 'lucide-react';
 import { useAuth } from '@/providers/AuthContext';
 import FloatingNavigationIsland, { FloatingNavigationItem } from '../ui/FloatingNavigationIsland';
 
@@ -35,6 +35,12 @@ const getMenuItems = (userRole?: string): MenuItem[] => {
       name: 'Documentos',
       href: `${basePrefix}/documents`,
       icon: <FileText className="w-6 h-6" />,
+    },
+    {
+      id: 'plantillas',
+      name: 'Plantillas',
+      href: `${basePrefix}/plantillas`,
+      icon: <FileStack className="w-6 h-6" />,
     },
     {
       id: 'activity',

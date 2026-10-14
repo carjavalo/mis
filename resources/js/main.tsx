@@ -7,6 +7,7 @@ import { DashboardHome } from './modules/admin/DashboardHome';
 import { Users } from './modules/admin/Users';
 
 import Documents from './modules/admin/Documents';
+import Templates from './modules/admin/Templates';
 import DocumentRecordsPage from './modules/admin/DocumentRecords';
 import DocumentRecordFormPage from './modules/admin/DocumentRecordForm';
 
@@ -82,6 +83,14 @@ const App = () => {
                             }
                         />
                         <Route
+                            path="/dashboard-admin/plantillas"
+                            element={
+                                <ProtectedRoute requiredRole="admin">
+                                    <Templates />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
                             path="/dashboard-admin/activity"
                             element={
                                 <ProtectedRoute requiredRole="super-admin">
@@ -136,6 +145,14 @@ const App = () => {
                             element={
                                 <ProtectedRoute requiredRole="super-admin">
                                     <DocumentRecordFormPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/dashboard-superadmin/plantillas"
+                            element={
+                                <ProtectedRoute requiredRole="super-admin">
+                                    <Templates />
                                 </ProtectedRoute>
                             }
                         />

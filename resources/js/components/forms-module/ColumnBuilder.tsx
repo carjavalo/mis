@@ -1,8 +1,8 @@
 // components/forms/ColumnBuilder.tsx
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowDown, ArrowUp, ChevronDown, FileText, Plus, Trash2 } from 'lucide-react';
-import { FormColumn, COLUMN_TYPES } from './types/types';
+import { ArrowDown, ArrowUp, ChevronDown, Copy, FileText, ImagePlus, Plus, Trash2 } from 'lucide-react';
+import { FormColumn, COLUMN_TYPES, isPresentationalColumn } from './types/types';
 import { getColumnIcon } from '@/components/ui/ColumnIcons';
 
 interface ColumnBuilderProps {
@@ -39,7 +39,12 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
     if (updates.type && updates.type !== 'enum') {
       delete updated[index].options;
     }
-    
+
+    // Los bloques de presentación (encabezado / información) no pueden ser obligatorios
+    if (isPresentationalColumn(updates.type)) {
+      updated[index].required = false;
+    }
+
     onChange(updated);
   };
 
@@ -57,6 +62,51 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
     });
   };
 
+  const duplicateColumn = (index: number) => {
+    const source = columns[index];
+    const existingNames = new Set(columns.map(col => col.name).filter(Boolean));
+
+    // Generar un nombre técnico único basado en el original (debe ser único al guardar)
+    let uniqueName = source.name ? `${source.name}_copia` : '';
+    let counter = 2;
+    while (uniqueName && existingNames.has(uniqueName)) {
+      uniqueName = `${source.name}_copia_${counter}`;
+      counter++;
+    }
+
+    // Los bloques de presentación no tienen nombre editable; garantizamos uno válido y único
+    if (isPresentationalColumn(source.type)) {
+      uniqueName = `h_${Date.now()}_${index}`;
+    }
+
+    const copy: FormColumn = {
+      ...source,
+      name: uniqueName,
+      label: source.label ? `${source.label} (copia)` : '',
+      options: source.options ? [...source.options] : undefined,
+    };
+
+    const updated = [...columns];
+    updated.splice(index + 1, 0, copy);
+    onChange(updated);
+
+    // Reindexar los borradores de opciones para los campos posteriores y copiar el del original
+    setOptionDrafts((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const draftIndex = Number(key);
+        if (draftIndex <= index) next[draftIndex] = value;
+        if (draftIndex > index) next[draftIndex + 1] = value;
+      });
+      if (source.type === 'enum') {
+        next[index + 1] = prev[index] ?? source.options?.join(', ') ?? '';
+      }
+      return next;
+    });
+
+    setExpandedIndex(index + 1);
+  };
+
   const moveColumn = (index: number, direction: 'up' | 'down') => {
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= columns.length) return;
@@ -72,6 +122,32 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
       next[newIndex] = prev[index] ?? columns[index]?.options?.join(', ') ?? '';
       return next;
     });
+  };
+
+  // ── Bloques del encabezado (texto + imágenes) ──
+  const addHeaderBlock = (index: number, type: 'text' | 'image', content = '') => {
+    const current = columns[index].blocks ?? [];
+    updateColumn(index, { blocks: [...current, { type, content }] });
+  };
+
+  const updateHeaderBlock = (index: number, blockIdx: number, content: string) => {
+    const current = [...(columns[index].blocks ?? [])];
+    current[blockIdx] = { ...current[blockIdx], content };
+    updateColumn(index, { blocks: current });
+  };
+
+  const removeHeaderBlock = (index: number, blockIdx: number) => {
+    const current = (columns[index].blocks ?? []).filter((_, i) => i !== blockIdx);
+    updateColumn(index, { blocks: current });
+  };
+
+  const handleHeaderImageUpload = (index: number, file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') addHeaderBlock(index, 'image', reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const generateFieldName = (label: string): string => {
@@ -131,7 +207,9 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
         {columns.map((column, index) => {
           const typeInfo = getTypeInfo(column.type);
           const isExpanded = expandedIndex === index;
-          const hasError = !column.label || !column.name || (column.type === 'enum' && (!column.options || column.options.length === 0));
+          const hasError = isPresentationalColumn(column.type)
+            ? !column.label
+            : (!column.label || !column.name || (column.type === 'enum' && (!column.options || column.options.length === 0)));
 
           return (
             <motion.div
@@ -162,7 +240,7 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                         )}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-slate-500">
-                        {typeInfo.label} {column.name && `- ${column.name}`}
+                        {typeInfo.label} {!isPresentationalColumn(column.type) && column.name && `- ${column.name}`}
                       </p>
                     </div>
                   </div>
@@ -198,6 +276,15 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                     </button>
                     <button
                       type="button"
+                      onClick={() => duplicateColumn(index)}
+                      className="rounded-lg p-2 text-slate-400 transition hover:bg-[#1e2b66]/10 hover:text-[#1e2b66] focus:outline-none focus:ring-4 focus:ring-[#1e2b66]/10"
+                      title="Duplicar campo"
+                      aria-label={`Duplicar campo ${index + 1}`}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => removeColumn(index)}
                       className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-4 focus:ring-red-100"
                       title="Eliminar campo"
@@ -221,7 +308,7 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                     <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
                     <div>
                       <label className={labelClassName}>
-                        Etiqueta visible <span className="text-red-500">*</span>
+                        {column.type === 'header' ? 'Texto del encabezado' : column.type === 'info' ? 'Texto informativo' : 'Etiqueta visible'} <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -229,17 +316,20 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                         onChange={(e) => {
                           const label = e.target.value;
                           const generatedName = generateFieldName(label);
-                          updateColumn(index, { 
+                          updateColumn(index, {
                             label,
                             name: generatedName
                           });
                         }}
-                        placeholder="ej: Fecha de Donación"
+                        placeholder={column.type === 'header' ? 'ej: Datos del Paciente' : column.type === 'info' ? 'ej: Diligencie con tinta negra' : 'ej: Fecha de Donación'}
                         className={fieldClassName}
                       />
-                      <p className="mt-1 text-xs text-slate-500">Lo que verá el usuario</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {column.type === 'header' ? 'Se mostrará como título dentro del formulario' : column.type === 'info' ? 'Se mostrará como bloque informativo (no se llena)' : 'Lo que verá el usuario'}
+                      </p>
                     </div>
 
+                    {!isPresentationalColumn(column.type) && (
                     <div>
                       <label className={labelClassName}>
                         Nombre técnico <span className="text-red-500">*</span>
@@ -253,6 +343,7 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                       />
                       <p className="mt-1 text-xs text-slate-500">snake_case, sin espacios</p>
                     </div>
+                    )}
 
                     <div>
                       <label className={labelClassName}>
@@ -272,6 +363,7 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                       <p className="mt-1 text-xs text-slate-500">{typeInfo.description}</p>
                     </div>
 
+                    {!isPresentationalColumn(column.type) && (
                     <div className="flex flex-col justify-center">
                       <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition hover:border-[#1e2b66]/30">
                         <input
@@ -288,7 +380,66 @@ const ColumnBuilder: React.FC<ColumnBuilderProps> = ({ columns, onChange }) => {
                         </div>
                       </label>
                     </div>
+                    )}
 
+
+                  {column.type === 'header' && (
+                    <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-sm font-semibold text-slate-700">Bloques adicionales (texto e imágenes)</label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => addHeaderBlock(index, 'text')}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#1e2b66]/40 hover:text-[#1e2b66]"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Texto
+                          </button>
+                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#1e2b66]/40 hover:text-[#1e2b66]">
+                            <ImagePlus className="h-3.5 w-3.5" /> Imagen / Logo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => { handleHeaderImageUpload(index, e.target.files?.[0]); e.currentTarget.value = ''; }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {(column.blocks ?? []).length === 0 ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Opcional: agrega líneas de texto o imágenes (ej. un logo) para darle el formato deseado al encabezado.
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {(column.blocks ?? []).map((block, bi) => (
+                            <div key={bi} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                              {block.type === 'image' ? (
+                                <img src={block.content} alt="Bloque" className="max-h-20 w-auto rounded object-contain" />
+                              ) : (
+                                <textarea
+                                  value={block.content}
+                                  onChange={(e) => updateHeaderBlock(index, bi, e.target.value)}
+                                  rows={2}
+                                  placeholder="Texto del bloque"
+                                  className="min-h-0 flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-[#1e2b66] focus:ring-4 focus:ring-[#1e2b66]/10"
+                                />
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeHeaderBlock(index, bi)}
+                                className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                                title="Quitar bloque"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {column.type === 'enum' && (
                     <div className="md:col-span-2 rounded-lg border border-[#1e2b66]/15 bg-[#1e2b66]/5 p-4">

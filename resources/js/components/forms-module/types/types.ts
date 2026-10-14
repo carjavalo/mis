@@ -1,11 +1,21 @@
 // components/forms/types/types.ts
 
 /**
+ * Bloque interno de un encabezado (texto o imagen).
+ * Para 'image', content es un data URL (base64) de la imagen subida.
+ */
+export interface HeaderBlock {
+  type: 'text' | 'image';
+  content: string;
+}
+
+/**
  * Definición de una columna en el formulario dinámico
  */
 export interface FormColumn {
   name: string;
-  type: 'string' | 'number' | 'decimal' | 'date' | 'datetime' | 'boolean' | 'enum' | 'text' | 'signature';
+  type: 'string' | 'number' | 'decimal' | 'date' | 'datetime' | 'boolean' | 'enum' | 'text' | 'signature' | 'header' | 'info';
+  blocks?: HeaderBlock[];  // Para tipo 'header': bloques de texto e imágenes
   label: string;
   required: boolean;
   options?: string[];      // Para tipo enum
@@ -40,6 +50,8 @@ export interface DynamicForm {
   created_at: string;
   updated_at: string;
   document_type_id?: number | null;
+  version?: string | null;
+  vigencia?: string | null;
   is_notification_enabled: boolean;
   notification_time?: string | null;
   type?: DocumentType;
@@ -53,6 +65,8 @@ export interface CreateFormData {
   slug: string;
   columns: FormColumn[];
   document_type_id?: number | null;
+  version?: string | null;
+  vigencia?: string | null;
   is_notification_enabled?: boolean;
   notification_time?: string | null;
 }
@@ -64,6 +78,34 @@ export interface UpdateFormData {
   name?: string;
   slug?: string;
   columns?: FormColumn[];
+}
+
+/**
+ * Plantilla de documento: estructura reutilizable ligada a un código.
+ */
+export interface DocumentTemplate {
+  id: number;
+  nombre: string;
+  codigo: string;
+  document_type_id?: number | null;
+  version?: string | null;
+  vigencia?: string | null;
+  columns_config: FormColumn[];
+  created_at?: string;
+  updated_at?: string;
+  type?: DocumentType;
+}
+
+/**
+ * Datos para crear/actualizar una plantilla
+ */
+export interface CreateTemplateData {
+  nombre: string;
+  codigo: string;
+  document_type_id?: number | null;
+  version?: string | null;
+  vigencia?: string | null;
+  columns_config: FormColumn[];
 }
 
 /**
@@ -146,7 +188,17 @@ export const COLUMN_TYPES = [
   {
     value: 'signature' as const,
     label: 'Firma',
-    description: 'Espacio para firmar dibujando con el mouse o el dedo'
+    description: 'Firma digital automática generada con el nombre del usuario'
+  },
+  {
+    value: 'header' as const,
+    label: 'Encabezado',
+    description: 'Sección con título, texto e imágenes (ej. logo). Solo presentación.'
+  },
+  {
+    value: 'info' as const,
+    label: 'Etiqueta / Información',
+    description: 'Bloque informativo o de convenciones. No se llena, es solo informativo.'
   }
 ] as const;
 
@@ -154,6 +206,15 @@ export const COLUMN_TYPES = [
  * Tipo para los valores de COLUMN_TYPES
  */
 export type ColumnType = typeof COLUMN_TYPES[number]['value'];
+
+/**
+ * Tipos de campo que son solo de presentación: no capturan datos, no crean
+ * columna física en la base de datos y no aparecen en las tablas de registros.
+ */
+export const PRESENTATIONAL_COLUMN_TYPES = ['header', 'info'] as const;
+
+export const isPresentationalColumn = (type?: string): boolean =>
+  !!type && (PRESENTATIONAL_COLUMN_TYPES as readonly string[]).includes(type);
 
 /**
  * Validación de formulario

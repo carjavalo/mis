@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertCircle, Bell, Check, Clock, FilePlus2, Info, Loader2, X } from 'lucide-react';
-import { CreateFormData, DocumentType } from '../types/types';
+import { CreateFormData, DocumentType, DocumentTemplate, isPresentationalColumn } from '../types/types';
 import ColumnBuilder from '../ColumnBuilder';
 import { formsService } from '@/lib/formService';
+import { templateService } from '@/lib/templateService';
 
 interface CreateFormModalProps {
   isOpen: boolean;
@@ -17,6 +18,8 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
     slug: '',
     columns: [],
     document_type_id: null,
+    version: '',
+    vigencia: '',
     is_notification_enabled: false,
     notification_time: '08:00'
   });
@@ -24,6 +27,7 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
   const [error, setError] = useState('');
   const [autoSlug, setAutoSlug] = useState(true);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
 
   const requiredColumns = useMemo(
     () => formData.columns.filter(column => column.required).length,
@@ -41,11 +45,30 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
       slug: '',
       columns: [],
       document_type_id: null,
+      version: '',
+      vigencia: '',
       is_notification_enabled: false,
       notification_time: '08:00'
     });
     setError('');
     setAutoSlug(true);
+  };
+
+  // Al elegir una plantilla se autocompletan nombre, código(slug), tipo, versión, vigencia y estructura
+  const applyTemplate = (templateId: string) => {
+    const t = templates.find(x => String(x.id) === templateId);
+    if (!t) return;
+    setAutoSlug(false);
+    setError('');
+    setFormData(prev => ({
+      ...prev,
+      name: t.nombre ?? '',
+      slug: t.codigo ?? '',
+      document_type_id: t.document_type_id ?? null,
+      version: t.version ?? '',
+      vigencia: t.vigencia ? String(t.vigencia).slice(0, 10) : '',
+      columns: Array.isArray(t.columns_config) ? t.columns_config : [],
+    }));
   };
 
   useEffect(() => {
@@ -59,6 +82,14 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
       })
       .catch(() => {
         if (isMounted) setError('No fue posible cargar los tipos de documento.');
+      });
+
+    templateService.getAll()
+      .then((list) => {
+        if (isMounted) setTemplates(list);
+      })
+      .catch(() => {
+        // Si falla, simplemente no se ofrecen plantillas
       });
 
     return () => {
@@ -122,9 +153,9 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
     }
 
     // Validar formato del slug
-    const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    const slugRegex = /^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/;
     if (!slugRegex.test(formData.slug)) {
-      setError('El slug solo puede contener letras minúsculas, números y guiones');
+      setError('El slug solo puede contener letras (mayúsculas o minúsculas), números y guiones');
       return false;
     }
 
@@ -134,11 +165,26 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
       return false;
     }
 
+    // Debe haber al menos un campo de datos (encabezados/información son solo presentación)
+    if (formData.columns.filter(col => !isPresentationalColumn(col.type)).length === 0) {
+      setError('El formulario debe tener al menos un campo de datos, no solo bloques de presentación.');
+      return false;
+    }
+
     // Validar cada columna
     for (let i = 0; i < formData.columns.length; i++) {
       const col = formData.columns[i];
       const columnName = col.name.trim();
-      
+
+      // Los bloques de presentación (encabezado / información) solo requieren su texto
+      if (isPresentationalColumn(col.type)) {
+        if (!col.label.trim()) {
+          setError(`El bloque de presentación #${i + 1} debe tener texto`);
+          return false;
+        }
+        continue;
+      }
+
       if (!columnName || !col.label.trim()) {
         setError(`La columna #${i + 1} debe tener nombre y etiqueta`);
         return false;
@@ -194,14 +240,19 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         document_type_id: formData.document_type_id,
+        version: formData.version?.trim() || null,
+        vigencia: formData.vigencia || null,
         is_notification_enabled: formData.is_notification_enabled,
         notification_time: formData.is_notification_enabled ? formData.notification_time : null,
-        columns: formData.columns.map(col => ({
-          name: col.name.trim(),
+        columns: formData.columns.map((col, idx) => ({
+          name: isPresentationalColumn(col.type)
+            ? `h_${Date.now()}_${idx}`
+            : col.name.trim(),
           type: col.type,
           label: col.label.trim(),
-          required: col.required || false,
-          options: col.type === 'enum' ? col.options : undefined
+          required: isPresentationalColumn(col.type) ? false : (col.required || false),
+          options: col.type === 'enum' ? col.options : undefined,
+          blocks: col.type === 'header' ? col.blocks : undefined
         }))
       };
 
@@ -326,6 +377,26 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 md:grid-cols-2">
+                      {templates.length > 0 && (
+                        <div className="md:col-span-2 rounded-lg border border-[#1e2b66]/20 bg-[#1e2b66]/5 p-4">
+                          <label className={labelClassName}>Usar una plantilla</label>
+                          <select
+                            defaultValue=""
+                            onChange={(event) => applyTemplate(event.target.value)}
+                            className={fieldClassName}
+                            disabled={isLoading}
+                          >
+                            <option value="">— Sin plantilla (empezar desde cero) —</option>
+                            {templates.map(t => (
+                              <option key={t.id} value={t.id}>{t.nombre} ({t.codigo})</option>
+                            ))}
+                          </select>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Al elegir una plantilla se autocompletan el nombre, código, tipo, versión, vigencia y la estructura.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="md:col-span-2">
                         <label className={labelClassName}>
                           Nombre del documento <span className="text-red-600">*</span>
@@ -385,6 +456,32 @@ const CreateFormModal: React.FC<CreateFormModalProps> = ({ isOpen, onClose, onSu
                             <option key={type.id} value={type.id}>{type.name}</option>
                           ))}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className={labelClassName}>Versión</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={formData.version ?? ''}
+                          onChange={(event) => setFormData(prev => ({ ...prev, version: event.target.value }))}
+                          placeholder="Ej: 1"
+                          className={fieldClassName}
+                          disabled={isLoading}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClassName}>Vigencia</label>
+                        <input
+                          type="date"
+                          value={formData.vigencia ?? ''}
+                          onChange={(event) => setFormData(prev => ({ ...prev, vigencia: event.target.value }))}
+                          className={fieldClassName}
+                          disabled={isLoading}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">Fecha de vigencia (D/M/A)</p>
                       </div>
 
                       <div className="md:col-span-2">

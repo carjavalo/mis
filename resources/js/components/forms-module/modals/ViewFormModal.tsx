@@ -1,5 +1,5 @@
 import React from 'react';
-import { DynamicForm, COLUMN_TYPES } from '../types/types';
+import { DynamicForm, COLUMN_TYPES, isPresentationalColumn } from '../types/types';
 import { getColumnIcon } from '@/components/ui/ColumnIcons';
 
 interface ViewFormModalProps {
@@ -133,12 +133,14 @@ const ViewFormModal: React.FC<ViewFormModalProps> = ({ isOpen, form, onClose }) 
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                          {!isPresentationalColumn(column.type) && (
                           <div>
                             <label className="text-xs font-medium text-gray-500">Nombre de Campo</label>
                             <p className="text-sm font-mono text-gray-900 mt-1 bg-gray-50 px-2 py-1 rounded">
                               {column.name}
                             </p>
                           </div>
+                          )}
                           <div>
                             <label className="text-xs font-medium text-gray-500">Tipo</label>
                             <p className="text-sm text-gray-900 mt-1">

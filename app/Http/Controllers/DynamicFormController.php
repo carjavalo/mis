@@ -25,6 +25,8 @@ class DynamicFormController extends Controller
             'boolean' => 'boolean',
             'enum' => 'string',
             'signature' => 'longText',
+            'header' => null, // Los encabezados no generan columna física
+            'info' => null,   // Los bloques informativos tampoco
             default => 'string'
         };
     }
@@ -50,14 +52,19 @@ class DynamicFormController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'required|alpha_dash|unique:dynamic_forms,slug',
+            'slug' => ['required', 'regex:/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/', 'unique:dynamic_forms,slug'],
             'columns' => 'required|array|min:1',
             'columns.*.name' => ['required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct', Rule::notIn($reservedColumnNames)],
-            'columns.*.type' => 'required|string|in:string,text,number,decimal,date,datetime,boolean,enum,signature',
+            'columns.*.type' => 'required|string|in:string,text,number,decimal,date,datetime,boolean,enum,signature,header,info',
             'columns.*.label' => 'required|string',
             'columns.*.required' => 'boolean',
             'columns.*.options' => 'array|required_if:columns.*.type,enum',
+            'columns.*.blocks' => 'nullable|array',
+            'columns.*.blocks.*.type' => 'nullable|string|in:text,image',
+            'columns.*.blocks.*.content' => 'nullable|string',
             'document_type_id' => 'nullable|exists:document_types,id',
+            'version' => 'nullable|string|max:20',
+            'vigencia' => 'nullable|date',
             'is_notification_enabled' => 'boolean',
             'notification_time' => 'nullable|date_format:H:i',
         ], [
@@ -69,6 +76,14 @@ class DynamicFormController extends Controller
             'columns.*.type.in' => 'Uno de los campos tiene un tipo de dato no permitido.',
             'columns.*.label.required' => 'Cada campo debe tener una etiqueta visible.',
         ]);
+
+        // El formulario debe tener al menos un campo de datos (no solo encabezados)
+        $dataColumns = array_filter($validated['columns'], fn($c) => !in_array($c['type'] ?? null, ['header', 'info']));
+        if (empty($dataColumns)) {
+            return response()->json([
+                'message' => 'El formulario debe tener al menos un campo de datos, no solo encabezados.'
+            ], 422);
+        }
 
         // Generar nombre único para la tabla física
         $tableName = 'form_' . Str::slug($validated['slug'], '_') . '_' . time();
@@ -85,7 +100,10 @@ class DynamicFormController extends Controller
             $table->text('review_comments')->nullable();
 
             foreach ($validated['columns'] as $column) {
-                // ... (existing logic)
+                if (in_array($column['type'], ['header', 'info'])) {
+                    continue; // Los bloques de presentación no crean columna física
+                }
+
                 $dbType = $this->mapColumnType($column['type']);
                 $blueprint = $table->{$dbType}($column['name']);
 
@@ -105,6 +123,8 @@ class DynamicFormController extends Controller
             'columns_config' => $validated['columns'],
             'created_by' => $request->user()->id ?? null,
             'document_type_id' => $validated['document_type_id'] ?? null,
+            'version' => $validated['version'] ?? null,
+            'vigencia' => $validated['vigencia'] ?? null,
             'is_notification_enabled' => $validated['is_notification_enabled'] ?? false,
             'notification_time' => $validated['notification_time'] ?? null,
         ]);
@@ -130,24 +150,68 @@ class DynamicFormController extends Controller
         return response()->json($form);
     }
 
-    // Actualizar un formulario
+    // Actualizar un formulario (metadatos + AGREGAR campos nuevos, nunca borrar/renombrar)
     public function update(Request $request, $id)
     {
         $form = DynamicForm::findOrFail($id);
 
+        $reservedColumnNames = [
+            'id', 'created_by', 'status', 'reviewer_id',
+            'reviewed_at', 'review_comments', 'created_at', 'updated_at',
+        ];
+
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'slug' => ['sometimes', 'alpha_dash', Rule::unique('dynamic_forms')->ignore($id)],
+            'slug' => ['sometimes', 'regex:/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/', Rule::unique('dynamic_forms')->ignore($id)],
             'document_type_id' => 'nullable|exists:document_types,id',
+            'version' => 'nullable|string|max:20',
+            'vigencia' => 'nullable|date',
             'is_notification_enabled' => 'boolean',
             'notification_time' => 'nullable|date_format:H:i',
+            'columns' => 'sometimes|array|min:1',
+            'columns.*.name' => ['required_with:columns', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct', Rule::notIn($reservedColumnNames)],
+            'columns.*.type' => 'required_with:columns|string|in:string,text,number,decimal,date,datetime,boolean,enum,signature,header,info',
+            'columns.*.label' => 'required_with:columns|string',
+            'columns.*.required' => 'boolean',
+            'columns.*.options' => 'array|required_if:columns.*.type,enum',
+            'columns.*.blocks' => 'nullable|array',
+            'columns.*.blocks.*.type' => 'nullable|string|in:text,image',
+            'columns.*.blocks.*.content' => 'nullable|string',
         ]);
 
-        $form->update($validated);
+        // Si se envían columnas, sincronizamos la tabla física AGREGANDO solo las nuevas.
+        // Nunca se elimina ni renombra una columna existente, así no se pierden datos.
+        if (isset($validated['columns'])) {
+            if (Schema::hasTable($form->table_name)) {
+                $toAdd = array_filter($validated['columns'], function ($column) use ($form) {
+                    if (in_array($column['type'], ['header', 'info'])) {
+                        return false; // los bloques de presentación no crean columna física
+                    }
+                    return !Schema::hasColumn($form->table_name, $column['name']);
+                });
+
+                if (!empty($toAdd)) {
+                    Schema::table($form->table_name, function ($table) use ($toAdd) {
+                        foreach ($toAdd as $column) {
+                            $dbType = $this->mapColumnType($column['type']);
+                            // Las columnas nuevas en una tabla con registros deben ser nullable
+                            $table->{$dbType}($column['name'])->nullable();
+                        }
+                    });
+                }
+            }
+
+            $form->columns_config = $validated['columns'];
+        }
+
+        // Metadatos (todo lo validado excepto 'columns')
+        $metadata = collect($validated)->except('columns')->toArray();
+        $form->fill($metadata);
+        $form->save();
 
         return response()->json([
             'message' => 'Formulario actualizado exitosamente',
-            'form' => $form
+            'form' => $form->fresh()
         ]);
     }
 
@@ -368,6 +432,10 @@ class DynamicFormController extends Controller
         $rules = [];
 
         foreach ($columnsConfig as $column) {
+            if (in_array($column['type'] ?? null, ['header', 'info'])) {
+                continue; // Los bloques de presentación no son campos de datos
+            }
+
             $columnRules = [];
 
             // Requerido o nullable

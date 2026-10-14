@@ -8,7 +8,9 @@ import {
   Clock,
   CheckCircle,
   List,
-  Signature
+  Signature,
+  Heading2,
+  Info
 } from 'lucide-react';
 
 export const ColumnIcons = {
@@ -21,6 +23,8 @@ export const ColumnIcons = {
   boolean: CheckCircle,
   enum: List,
   signature: Signature,
+  header: Heading2,
+  info: Info,
 };
 
 export const getColumnIcon = (type: string, className: string = "w-5 h-5") => {

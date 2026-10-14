@@ -2,13 +2,31 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AlertCircle, CheckCircle, Clock, Eye, FileText, Loader2, MessageSquare, RotateCcw, Save, ShieldCheck, X, XCircle } from 'lucide-react';
-import { DynamicForm, FormColumn, COLUMN_TYPES } from './types/types';
+import { DynamicForm, FormColumn, COLUMN_TYPES, isPresentationalColumn } from './types/types';
 import { formsService } from '@/lib/formService';
 import { getColumnIcon } from '@/components/ui/ColumnIcons';
-import SignaturePad from '@/components/ui/SignaturePad';
 import { useToast } from '@/providers/ToastContext';
 import { getNotificationCopy, NotificationKey } from '@/constants/notifications';
 import { useAuth } from '@/providers/AuthContext';
+
+// Fuente tipo firma para la firma digital automática
+const SIGNATURE_FONT = "'Segoe Script', 'Brush Script MT', 'Lucida Handwriting', cursive";
+
+/**
+ * Genera la firma digital a partir del nombre completo del usuario.
+ * Regla: primer nombre + inicial del primer apellido. Ej: "Camilo Morales" -> "Camilo M."
+ * Si solo hay una palabra, devuelve solo el nombre.
+ */
+const buildDigitalSignature = (fullName?: string | null): string => {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  const firstName = capitalize(parts[0]);
+  if (parts.length === 1) return firstName;
+  const surnameInitial = parts[1].charAt(0).toUpperCase();
+  return `${firstName} ${surnameInitial}.`;
+};
 
 interface DynamicRecordFormProps {
   form: DynamicForm;
@@ -45,7 +63,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
   const { success: toastSuccess, error: toastError } = useToast();
 
   const requiredCount = useMemo(
-    () => form.columns_config.filter((column) => column.required).length,
+    () => form.columns_config.filter((column) => column.required && !isPresentationalColumn(column.type)).length,
     [form.columns_config]
   );
 
@@ -71,10 +89,25 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
 
     const defaultValues: Record<string, any> = {};
     form.columns_config.forEach((column) => {
+      if (isPresentationalColumn(column.type)) return;
       defaultValues[column.name] = column.type === 'boolean' ? false : '';
     });
     setFormData(defaultValues);
   }, [recordId, form.columns_config]);
+
+  // Firma digital automática: en registros nuevos, la firma se genera del nombre del usuario.
+  // Solo toca los campos de tipo 'signature', sin pisar el resto de los datos.
+  useEffect(() => {
+    if (isEditing || !user) return;
+    const signature = buildDigitalSignature(user.nombre);
+    setFormData((current) => {
+      const next = { ...current };
+      form.columns_config.forEach((column) => {
+        if (column.type === 'signature') next[column.name] = signature;
+      });
+      return next;
+    });
+  }, [user, isEditing, form.columns_config]);
 
   const checkPermissions = async () => {
     // Administradores y editores siempre pueden editar; el resto depende del permiso del documento
@@ -145,6 +178,7 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     const nextErrors: Record<string, string> = {};
 
     form.columns_config.forEach((column) => {
+      if (isPresentationalColumn(column.type)) return;
       if (column.required) {
         const value = formData[column.name];
         if (value === undefined || value === null || value === '') {
@@ -176,6 +210,11 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
       delete dataToSave.reviewer_id;
       delete dataToSave.reviewed_at;
       delete dataToSave.review_comments;
+
+      // Los bloques de presentación no son datos: no deben enviarse al backend
+      form.columns_config.forEach((column) => {
+        if (isPresentationalColumn(column.type)) delete dataToSave[column.name];
+      });
 
       if (isEditing && recordId) {
         await formsService.updateFormRecord(documentId, recordId, dataToSave);
@@ -254,6 +293,10 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
     }`;
 
     switch (column.type) {
+      case 'header':
+      case 'info':
+        return null;
+
       case 'text':
         return (
           <textarea
@@ -280,15 +323,31 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
           </select>
         );
 
-      case 'signature':
+      case 'signature': {
+        const isImage = typeof value === 'string' && value.startsWith('data:image');
         return (
-          <SignaturePad
-            value={value}
-            onChange={(dataUrl) => handleInputChange(column.name, dataUrl)}
-            hasError={hasError}
-            disabled={readOnly}
-          />
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
+            {isImage ? (
+              <img
+                src={value}
+                alt="Firma"
+                className="h-16 w-auto max-w-[240px] rounded border border-slate-200 bg-white object-contain"
+              />
+            ) : value ? (
+              <div className="flex items-end gap-3">
+                <span className="text-3xl leading-none text-[#1e2b66]" style={{ fontFamily: SIGNATURE_FONT }}>
+                  {value}
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm text-slate-400">Sin firma disponible</span>
+            )}
+            <p className="mt-3 border-t border-slate-200 pt-2 text-xs text-slate-500">
+              Firma digital generada automáticamente a partir de tu nombre.
+            </p>
+          </div>
         );
+      }
 
       case 'boolean': {
         const boolValue = value === true || value === 'true' || value === 1;
@@ -523,7 +582,34 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
         </div>
 
         <div className="divide-y divide-slate-100">
-          {form.columns_config.map((column) => (
+          {form.columns_config.map((column) => {
+            if (column.type === 'header') {
+              return (
+                <div key={column.name} className="bg-slate-50/70 px-5 py-4">
+                  {column.label && <h2 className="text-lg font-bold text-slate-950">{column.label}</h2>}
+                  {column.blocks && column.blocks.length > 0 && (
+                    <div className="mt-3 space-y-3">
+                      {column.blocks.map((block, i) => block.type === 'image' ? (
+                        <img key={i} src={block.content} alt="" className="max-h-32 w-auto object-contain" />
+                      ) : (
+                        <p key={i} className="whitespace-pre-wrap text-sm text-slate-700">{block.content}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            if (column.type === 'info') {
+              return (
+                <div key={column.name} className="mx-5 my-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="flex items-start gap-2 text-amber-900">
+                    <span className="mt-0.5 shrink-0 text-amber-600">{getColumnIcon('info', 'h-4 w-4')}</span>
+                    <p className="whitespace-pre-wrap text-sm">{column.label}</p>
+                  </div>
+                </div>
+              );
+            }
+            return (
             <div key={column.name} className="p-5 transition hover:bg-slate-50/70">
               <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-start">
                 <div className="flex items-start gap-3">
@@ -563,7 +649,8 @@ const DynamicRecordForm: React.FC<DynamicRecordFormProps> = ({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

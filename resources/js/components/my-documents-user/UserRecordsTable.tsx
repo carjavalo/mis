@@ -6,6 +6,7 @@ import { Eye, Edit, Trash2, Plus, FileText } from 'lucide-react';
 import Pagination from '@/components/ui/Pagination';
 import { useToast } from '@/providers/ToastContext';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { isPresentationalColumn } from '@/components/forms-module/types/types';
 
 interface UserRecordsTableProps {
   form: any;
@@ -126,7 +127,7 @@ const UserRecordsTable: React.FC<UserRecordsTableProps> = ({ form, documentId })
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 ID
               </th>
-              {form.columns_config.slice(0, 3).map((column: any) => (
+              {form.columns_config.filter((column: any) => !isPresentationalColumn(column.type)).slice(0, 3).map((column: any) => (
                 <th key={column.name} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {column.label}
                 </th>
@@ -142,15 +143,21 @@ const UserRecordsTable: React.FC<UserRecordsTableProps> = ({ form, documentId })
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   #{record.id}
                 </td>
-                {form.columns_config.slice(0, 3).map((column: any) => (
+                {form.columns_config.filter((column: any) => !isPresentationalColumn(column.type)).slice(0, 3).map((column: any) => (
                   <td key={column.name} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {column.type === 'signature' ? (
                       record[column.name] ? (
-                        <img
-                          src={record[column.name]}
-                          alt="Firma"
-                          className="h-9 w-auto max-w-[140px] rounded border border-gray-200 bg-white object-contain"
-                        />
+                        String(record[column.name]).startsWith('data:image') ? (
+                          <img
+                            src={record[column.name]}
+                            alt="Firma"
+                            className="h-9 w-auto max-w-[140px] rounded border border-gray-200 bg-white object-contain"
+                          />
+                        ) : (
+                          <span className="text-lg text-[#1e2b66]" style={{ fontFamily: "'Segoe Script','Brush Script MT',cursive" }}>
+                            {record[column.name]}
+                          </span>
+                        )
                       ) : (
                         <span className="text-gray-400">Sin firma</span>
                       )

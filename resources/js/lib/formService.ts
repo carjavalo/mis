@@ -47,8 +47,13 @@ class FormsService {
   }
 
   async updateForm(id: number, data: Partial<CreateFormData>): Promise<DynamicForm> {
-    const response = await axios.put(`/api/forms/${id}`, data);
-    return response.data;
+    const response = await axios.put(`/api/forms/${id}`, data, {
+      validateStatus: (status) => status < 500,
+    });
+    if (response.status >= 400) {
+      throw new Error(getApiErrorMessage(response.data, 'Error al actualizar el documento'));
+    }
+    return response.data.form || response.data;
   }
 
   async deleteForm(id: number): Promise<void> {
